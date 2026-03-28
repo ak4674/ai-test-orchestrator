@@ -106,7 +106,7 @@ class AIService {
 
   async generateWithGemini(data, type) {
     try {
-      const model = "gemini-3-flash-preview"; 
+      const model = "gemini-1.5-flash"; // Switched for stability (Gemini 3 Flash is experiencing high demand)
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
       
       let prompt = '';
@@ -114,7 +114,7 @@ class AIService {
 
       if (type === 'plan') {
          prompt = `Create a structured test plan for Jira story: ${data.story?.summary || 'New System'}. Return ONLY raw JSON (no markdown blocks, no intro/outro). 
-         JSON Keys: objective, entryCriteria, riskAssessment, planContent.
+         JSON Keys: objectives (array), risks (array), entryCriteria (array), dataRequirements (array).
          Story Context: ${data.story?.description || 'No detailed description'}`;
       } else if (type === 'cases') {
          prompt = `Generate 5 test cases for: ${data.story?.summary || 'System based on screenshot'}. Return ONLY a raw JSON array of objects with keys: id, title, priority, category, status. No markdown.`;
