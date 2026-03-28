@@ -35,28 +35,46 @@ const jira = new JiraClient({
   apiToken: process.env.JIRA_API_TOKEN,
 });
 
+// Helper to extract text from Atlassian Document Format (Jira V3)
+function extractTextFromADF(adf) {
+  if (!adf || !adf.content) return '';
+  let text = '';
+  const traverse = (node) => {
+    if (node.text) text += node.text;
+    if (node.content) node.content.forEach(traverse);
+  };
+  adf.content.forEach(traverse);
+  return text.trim();
+}
+
 // 1. Jira Stories
 app.get('/api/jira/stories', async (req, res) => {
   try {
-    const healthy = await jira.isHealthy();
-    if (healthy) {
+    const isHealthy = await jira.isHealthy();
+    if (isHealthy) {
       const results = await jira.searchIssues(20);
-      const stories = results.issues.map(issue => ({
-        id: issue.id,
-        key: issue.key,
-        summary: issue.fields.summary,
-        description: issue.fields.description,
-        priority: issue.fields.priority?.name || 'Medium',
-        status: issue.fields.status?.name || 'Open',
-      }));
-      // Keep local sync for generation
-      storiesStore = stories;
-      return res.json(stories);
+      if (results && results.issues && Array.isArray(results.issues)) {
+        const stories = results.issues.map(issue => {
+          const fields = issue.fields || {};
+          return {
+            id: issue.id,
+            key: issue.key,
+            summary: fields.summary || 'No Summary',
+            description: typeof fields.description === 'object' 
+              ? extractTextFromADF(fields.description) 
+              : (fields.description || 'No Description'),
+            priority: fields.priority?.name || 'Medium',
+            status: fields.status?.name || 'Open',
+          };
+        });
+        storiesStore = stories;
+        return res.json(stories);
+      }
     }
-    res.json(storiesStore);
   } catch (err) {
-    res.json(storiesStore);
+    console.error('❌ Jira Error:', err.message);
   }
+  res.json(storiesStore);
 });
 
 // 2. Test Plan Generation (SSE)

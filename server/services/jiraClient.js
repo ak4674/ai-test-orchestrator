@@ -23,6 +23,7 @@ class JiraClient {
     this.projectKey = config.projectKey;
     this.headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
 
     // Add authentication for real Jira
@@ -53,7 +54,7 @@ class JiraClient {
       },
     };
 
-    const response = await fetch(`${this.baseURL}/rest/api/2/issue`, {
+    const response = await fetch(`${this.baseURL}/rest/api/3/issue`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(body),
@@ -73,7 +74,7 @@ class JiraClient {
    * @returns {Promise<Object>} Issue details
    */
   async getIssue(issueKey) {
-    const response = await fetch(`${this.baseURL}/rest/api/2/issue/${issueKey}`, {
+    const response = await fetch(`${this.baseURL}/rest/api/3/issue/${issueKey}`, {
       headers: this.headers,
     });
 
@@ -91,14 +92,14 @@ class JiraClient {
    * @returns {Promise<Object>} Search results with issues array
    */
   async searchIssues(maxResults = 50) {
-    const response = await fetch(
-      `${this.baseURL}/rest/api/2/search?maxResults=${maxResults}`,
-      { headers: this.headers }
-    );
+    const url = `${this.baseURL}/rest/api/3/search/jql?jql=project=${this.projectKey}&maxResults=${maxResults}&fields=key,summary,description,priority,status,issuetype`;
+    console.log(`🔍 Searching Jira issues at: ${url}`);
+    const response = await fetch(url, { headers: this.headers });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Failed to search issues: ${JSON.stringify(error)}`);
+      const errorText = await response.text();
+      console.error(`Jira API Error [${response.status}]: ${errorText}`);
+      throw new Error(`Failed to search issues: ${response.status}`);
     }
 
     return response.json();
@@ -110,7 +111,16 @@ class JiraClient {
    */
   async isHealthy() {
     try {
-      const response = await fetch(`${this.baseURL}/health`);
+      // If it's the mock server on localhost (using port 3001 typically)
+      if (this.baseURL.includes('localhost')) {
+        const resp = await fetch(`${this.baseURL}/health`);
+        return resp.ok;
+      }
+      
+      // For real Jira Cloud
+      const response = await fetch(`${this.baseURL}/rest/api/3/serverInfo`, {
+        headers: this.headers,
+      });
       return response.ok;
     } catch {
       return false;
