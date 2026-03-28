@@ -150,7 +150,8 @@ const App: React.FC = () => {
     setActiveTab('plan');
 
     const eventSource = new EventSource(`${API_BASE}/generate/test-plan?storyId=${story.id}&provider=${selectedProvider}`);
-    
+    console.log('🔗 Connecting SSE:', eventSource.url);
+
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.status === 'analyzing') setAiStatus(data.message);
@@ -160,9 +161,17 @@ const App: React.FC = () => {
         eventSource.close();
       }
       if (data.status === 'error') {
+        setAiStatus(`Error: ${data.message}`);
         setIsGeneratingPlan(false);
         eventSource.close();
       }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('❌ SSE Connection Error:', err);
+      setAiStatus('Lost connection to backend. Retrying...');
+      eventSource.close();
+      setIsGeneratingPlan(false);
     };
   };
 

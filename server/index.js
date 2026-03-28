@@ -80,7 +80,11 @@ app.get('/api/jira/stories', async (req, res) => {
 // 2. Test Plan Generation (SSE)
 app.get('/api/generate/test-plan', async (req, res) => {
   const { storyId, provider } = req.query;
-  const story = storiesStore.find(s => s.id === storyId);
+  const story = storiesStore.find(s => s.id == storyId); // Note: == for string/number match
+  
+  if (!story && !storyId) {
+    return res.status(400).json({ error: 'Missing Story Context' });
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
