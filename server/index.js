@@ -79,7 +79,7 @@ app.get('/api/jira/stories', async (req, res) => {
 
 // 2. Test Plan Generation (SSE)
 app.get('/api/generate/test-plan', async (req, res) => {
-  const { storyId } = req.query;
+  const { storyId, provider } = req.query;
   const story = storiesStore.find(s => s.id === storyId);
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -92,7 +92,7 @@ app.get('/api/generate/test-plan', async (req, res) => {
   
   // Real AI Call
   try {
-    const plan = await aiService.generateTestPlan(story);
+    const plan = await aiService.generateTestPlan(story, provider);
     sendEvent({ status: 'complete', plan });
   } catch (err) {
     sendEvent({ status: 'error', message: 'AI Generation Failed' });
@@ -102,11 +102,11 @@ app.get('/api/generate/test-plan', async (req, res) => {
 
 // 3. Test Case Generation
 app.post('/api/generate/test-cases', async (req, res) => {
-  const { storyId } = req.body;
+  const { storyId, provider } = req.body;
   const story = storiesStore.find(s => s.id === storyId);
   
   try {
-    const newCases = await aiService.generateTestCases(story);
+    const newCases = await aiService.generateTestCases(story, provider);
     res.json(newCases);
   } catch (err) {
     res.status(500).json({ error: 'AI generation failed' });
@@ -115,10 +115,10 @@ app.post('/api/generate/test-cases', async (req, res) => {
 
 // 4. Code Generation
 app.post('/api/generate/code', async (req, res) => {
-  const { framework, language, testCase } = req.body;
+  const { framework, language, testCase, provider } = req.body;
   
   try {
-    const code = await aiService.generateCode(framework, language, testCase);
+    const code = await aiService.generateCode(framework, language, testCase, provider);
     res.json({ code });
   } catch (err) {
     res.status(500).json({ error: 'AI generation failed' });

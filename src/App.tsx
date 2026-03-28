@@ -14,11 +14,8 @@ import {
   RefreshCw,
   Copy,
   Download,
-  AlertCircle,
   BrainCircuit,
   ShieldCheck as ShieldIcon,
-  PieChart as PieChartIcon,
-  Terminal,
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -113,6 +110,7 @@ const App: React.FC = () => {
   const [selectedFramework, setSelectedFramework] = useState('Playwright');
   const [selectedLanguage, setSelectedLanguage] = useState('TypeScript');
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState('anthropic');
 
   // Sync Jira Stories
   const syncJira = async () => {
@@ -139,7 +137,7 @@ const App: React.FC = () => {
     setTestPlan(null);
     setActiveTab('plan');
 
-    const eventSource = new EventSource(`${API_BASE}/generate/test-plan?storyId=${story.id}`);
+    const eventSource = new EventSource(`${API_BASE}/generate/test-plan?storyId=${story.id}&provider=${selectedProvider}`);
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -164,7 +162,7 @@ const App: React.FC = () => {
       const res = await fetch(`${API_BASE}/generate/test-cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyId: selectedStory.id })
+        body: JSON.stringify({ storyId: selectedStory.id, provider: selectedProvider })
       });
       const data = await res.json();
       setTestCases(data);
@@ -188,7 +186,8 @@ const App: React.FC = () => {
         body: JSON.stringify({ 
           testCase, 
           framework: selectedFramework, 
-          language: selectedLanguage 
+          language: selectedLanguage,
+          provider: selectedProvider
         })
       });
       const data = await res.json();
@@ -223,6 +222,32 @@ const App: React.FC = () => {
           <NavItem icon={<CheckCircle2 size={20}/>} label="Test Repository" active={activeTab === 'cases'} onClick={() => setActiveTab('cases')} />
           <NavItem icon={<Code2 size={20}/>} label="Synesthetic Code" active={activeTab === 'code'} onClick={() => setActiveTab('code')} />
         </nav>
+
+        {/* AI Provider Selector */}
+        <div className="px-6 py-4 border-t border-white/5 bg-black/20">
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-heading mb-3">Neural Core</p>
+          <div className="space-y-2">
+            {[
+              { id: 'anthropic', name: 'Claude 3.5', color: '#FF7F50' },
+              { id: 'gemini', name: 'Gemini Flash', color: '#4285F4' },
+              { id: 'local', name: 'Local (Llama)', color: '#39FF14' }
+            ].map(p => (
+              <label key={p.id} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-all border ${selectedProvider === p.id ? 'bg-white/5 border-cyan/30 shadow-[0_0_10px_rgba(0,240,255,0.1)]' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                <input 
+                  type="radio" 
+                  name="provider" 
+                  value={p.id} 
+                  checked={selectedProvider === p.id}
+                  onChange={() => setSelectedProvider(p.id)}
+                  className="hidden"
+                />
+                <div className={`w-2 h-2 rounded-full`} style={{ backgroundColor: p.color, boxShadow: `0 0 8px ${p.color}` }} />
+                <span className="text-xs font-heading font-medium tracking-wide">{p.name}</span>
+                {selectedProvider === p.id && <div className="ml-auto w-1 h-1 bg-cyan rounded-full animate-ping" />}
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="p-6 border-t border-white/5">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-cyan/20">
