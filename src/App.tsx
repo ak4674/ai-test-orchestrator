@@ -69,7 +69,7 @@ interface TestCase {
 }
 
 // Sentinel Logo Concept: Eye + Shield merged
-const SentinelLogo = () => (
+const KairosLogo = () => (
   <div className="relative group">
     <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_10px_rgba(0,240,255,0.4)] transition-all duration-500 group-hover:scale-110">
       {/* Outer Shield Outline */}
@@ -220,7 +220,7 @@ const App: React.FC = () => {
       {/* Sidebar - Cyber Identity */}
       <aside className="w-72 bg-[#111827] border-r border-white/5 flex flex-col relative z-10 box-border">
         <div className="p-8 pb-4 flex items-center gap-4">
-          <SentinelLogo />
+          <KairosLogo />
           <div>
             <h1 className="text-2xl font-brand font-black text-[#00F0FF] tracking-tighter leading-none animate-glow-text">
               KAIROS
@@ -631,7 +631,7 @@ const App: React.FC = () => {
                 className="glass-card flex flex-col h-[700px] border-none shadow-2xl relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 p-8 opacity-5">
-                   <SentinelLogo />
+                   <KairosLogo />
                 </div>
                 <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02] z-10">
                   <div className="flex items-center gap-6">
