@@ -556,10 +556,10 @@ const App: React.FC = () => {
 
                     {testPlan && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <PlanSection title="Primary Objectives" items={testPlan.objectives} icon={<ShieldCheck className="text-[#39FF14]"/>} />
-                        <PlanSection title="Risk Matrix" items={testPlan.risks} icon={<AlertTriangle className="text-[#FF006E]"/>} />
-                        <PlanSection title="Entry Criteria" items={testPlan.entryCriteria} icon={<CheckCircle2 className="text-[#00F0FF]"/>} />
-                        <PlanSection title="Data Strategy" items={testPlan.dataRequirements} icon={<Database className="text-[#F7C948]"/>} />
+                        <PlanSection title="Primary Objectives" items={testPlan.objectives || []} icon={<ShieldCheck className="text-[#39FF14]"/>} />
+                        <PlanSection title="Risk Matrix" items={testPlan.risks || []} icon={<AlertTriangle className="text-[#FF006E]"/>} />
+                        <PlanSection title="Entry Criteria" items={testPlan.entryCriteria || []} icon={<CheckCircle2 className="text-[#00F0FF]"/>} />
+                        <PlanSection title="Data Strategy" items={testPlan.dataRequirements || []} icon={<Database className="text-[#F7C948]"/>} />
                       </div>
                     )}
                   </>

@@ -93,7 +93,7 @@ app.get('/api/generate/test-plan', async (req, res) => {
 // 3. Test Case Generation
 app.post('/api/generate/test-cases', async (req, res) => {
   const { storyId, provider, screenshot } = req.body;
-  const story = storiesStore.find(s => s.id === storyId);
+  const story = storiesStore.find(s => s.id == storyId);
   
   try {
     const newCases = await aiService.generateTestCases({ story, screenshot }, provider);
