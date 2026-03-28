@@ -4,26 +4,26 @@ import {
   CheckCircle2, 
   Code2, 
   Database, 
-  FileText, 
   LayoutDashboard, 
-  Plus, 
   Search, 
   Settings, 
   ShieldCheck, 
   Zap,
-  PlayCircle,
-  AlertCircle,
-  ClipboardList,
+  AlertTriangle,
   ChevronRight,
-  Loader2,
-  Terminal
+  RefreshCw,
+  Copy,
+  Download,
+  AlertCircle,
+  BrainCircuit,
+  ShieldCheck as ShieldIcon,
+  PieChart as PieChartIcon,
+  Terminal,
 } from 'lucide-react';
 import { 
   BarChart, 
   Bar, 
   XAxis, 
-  YAxis, 
-  CartesianGrid, 
   Tooltip, 
   ResponsiveContainer, 
   PieChart, 
@@ -38,346 +38,447 @@ const API_BASE = window.location.hostname === 'localhost'
   : `${window.location.origin}/api`;
 
 const STATS_DATA = [
-  { name: 'Critical', value: 4, color: '#F43F5E' },
-  { name: 'High', value: 8, color: '#FB923C' },
-  { name: 'Medium', value: 12, color: '#38BDF8' },
-  { name: 'Low', value: 6, color: '#94A3B8' },
+  { name: 'Critical', value: 4, color: '#FF006E' }, // Hot Pink
+  { name: 'High', value: 8, color: '#0066FF' },     // Electric Blue
+  { name: 'Medium', value: 12, color: '#00F0FF' },   // Cyan
+  { name: 'Low', value: 6, color: '#39FF14' },      // Neon Green
 ];
+
+// Types
+interface JiraStory {
+  id: string;
+  key: string;
+  summary: string;
+  description: string;
+  priority: string;
+  status: string;
+}
+
+interface TestPlan {
+  objectives: string[];
+  risks: string[];
+  entryCriteria: string[];
+  dataRequirements: string[];
+}
+
+interface TestCase {
+  id: string;
+  title: string;
+  type: string;
+  preconditions: string;
+  steps: string[];
+  expectedResults: string;
+}
+
+// Sentinel Logo Concept: Eye + Shield merged
+const SentinelLogo = () => (
+  <div className="relative group">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_0_10px_rgba(0,240,255,0.4)] transition-all duration-500 group-hover:scale-110">
+      {/* Outer Shield Outline */}
+      <path d="M20 2L4 8V18C4 28.3 10.8 37.9 20 42C29.2 37.9 36 28.3 36 18V8L20 2Z" 
+        stroke="currentColor" strokeWidth="2" className="text-[#00F0FF] opacity-40 shadow-inner" />
+      {/* Inner Shield Gradient */}
+      <path d="M20 4L6 9.3V18C6 26.5 11.5 34.3 20 37.6C28.5 34.3 34 26.5 34 18V9.3L20 4Z" 
+        fill="url(#shieldGrad)" fillOpacity="0.1" />
+      {/* The Eye */}
+      <path d="M8 20C8 20 12.5 12 20 12C27.5 12 32 20 32 20C32 20 27.5 28 20 28C12.5 28 8 20 8 20Z" 
+        stroke="#00F0FF" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Pulsing Iris */}
+      <circle cx="20" cy="20" r="4.5" fill="#00F0FF" className="animate-pulse shadow-[0_0_15px_#00F0FF]" />
+      <defs>
+        <linearGradient id="shieldGrad" x1="20" y1="2" x2="20" y2="42" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#00F0FF" />
+          <stop offset="1" stopColor="#0066FF" />
+        </linearGradient>
+      </defs>
+    </svg>
+    <div className="absolute -inset-1 bg-cyan/10 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+  </div>
+);
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [genMessage, setGenMessage] = useState('');
+  const [stories, setStories] = useState<JiraStory[]>([]);
+  const [selectedStory, setSelectedStory] = useState<JiraStory | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   
-  // Real State from Backend
-  const [stories, setStories] = useState<any[]>([]);
-  const [selectedStory, setSelectedStory] = useState<string | null>(null);
-  const [currentPlan, setCurrentPlan] = useState<any>(null);
-  const [testCases, setTestCases] = useState<any[]>([]);
-  const [generatedCode, setGeneratedCode] = useState<string>('');
-  const [selectedTC, setSelectedTC] = useState<any>(null);
+  const [testPlan, setTestPlan] = useState<TestPlan | null>(null);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [aiStatus, setAiStatus] = useState<string>('');
 
-  // Fetch Stories on Mount
+  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [isGeneratingCases, setIsGeneratingCases] = useState(false);
+
+  const [generatedCode, setGeneratedCode] = useState<string>('');
+  const [selectedFramework, setSelectedFramework] = useState('Playwright');
+  const [selectedLanguage, setSelectedLanguage] = useState('TypeScript');
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+
+  // Sync Jira Stories
+  const syncJira = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`${API_BASE}/jira/stories`);
+      const data = await res.json();
+      setStories(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
-    fetch(`${API_BASE}/jira/stories`)
-      .then(res => res.json())
-      .then(data => setStories(data))
-      .catch(err => console.error('Fetch Error:', err));
+    syncJira();
   }, []);
 
-  // Real-time Test Plan Generation (SSE)
-  const handleGenerateTestPlan = () => {
-    if (!selectedStory) return;
-    setIsGenerating(true);
-    setCurrentPlan(null);
+  // AI Test Plan Generation (SSE)
+  const generateTestPlan = async (story: JiraStory) => {
+    setSelectedStory(story);
+    setIsGeneratingPlan(true);
+    setTestPlan(null);
+    setActiveTab('plan');
 
-    const eventSource = new EventSource(`${API_BASE}/generate/test-plan?storyId=${selectedStory}`);
+    const eventSource = new EventSource(`${API_BASE}/generate/test-plan?storyId=${story.id}`);
     
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      if (data.status === 'analyzing') setAiStatus(data.message);
       if (data.status === 'complete') {
-        setCurrentPlan(data.plan);
-        setIsGenerating(false);
+        setTestPlan(data.plan);
+        setIsGeneratingPlan(false);
         eventSource.close();
-      } else {
-        setGenMessage(data.message);
       }
-    };
-
-    eventSource.onerror = () => {
-      setIsGenerating(false);
-      eventSource.close();
+      if (data.status === 'error') {
+        setIsGeneratingPlan(false);
+        eventSource.close();
+      }
     };
   };
 
   // Generate Test Cases
-  const handleGenerateTestCases = async () => {
+  const generateTestCases = async () => {
     if (!selectedStory) return;
-    setIsGenerating(true);
-    setGenMessage('Analyzing architecture for test scenario mapping...');
-    
+    setIsGeneratingCases(true);
     try {
       const res = await fetch(`${API_BASE}/generate/test-cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyId: selectedStory })
+        body: JSON.stringify({ storyId: selectedStory.id })
       });
       const data = await res.json();
       setTestCases(data);
-      setIsGenerating(false);
+      setActiveTab('cases');
     } catch (err) {
       console.error(err);
-      setIsGenerating(false);
+    } finally {
+      setIsGeneratingCases(false);
     }
   };
 
-  // Generate Code
-  const handleGenerateCode = async (tc: any) => {
-    setIsGenerating(true);
-    setSelectedTC(tc);
-    setGenMessage(`Building ${tc.title} automation script...`);
-    
+  // Generate Automation Code
+  const generateCode = async (testCase: TestCase) => {
+    setIsGeneratingCode(true);
+    setGeneratedCode('');
+    setActiveTab('code');
     try {
       const res = await fetch(`${API_BASE}/generate/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          framework: 'Playwright', 
-          language: 'TypeScript', 
-          testCase: tc 
+          testCase, 
+          framework: selectedFramework, 
+          language: selectedLanguage 
         })
       });
       const data = await res.json();
       setGeneratedCode(data.code);
-      setActiveTab('code');
-      setIsGenerating(false);
     } catch (err) {
       console.error(err);
-      setIsGenerating(false);
+    } finally {
+      setIsGeneratingCode(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-bg text-slate-100 selection:bg-primary/30">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-bg-card/50 flex flex-col backdrop-blur-md">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-            <Zap className="w-6 h-6 text-white" />
+    <div className="flex h-screen bg-[#0a0e1a] text-slate-100 overflow-hidden font-body">
+      {/* Sidebar - Cyber Identity */}
+      <aside className="w-72 bg-[#111827] border-r border-white/5 flex flex-col relative z-10 box-border">
+        <div className="p-8 pb-4 flex items-center gap-4">
+          <SentinelLogo />
+          <div>
+            <h1 className="text-2xl font-brand font-black text-[#00F0FF] tracking-tighter leading-none animate-glow-text">
+              KAIROS
+            </h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] font-heading text-slate-500 mt-1">
+              Perfect-Moment QA
+            </p>
           </div>
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 font-display">
-            Orchestrator
-          </span>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-2">
-          {[
-            { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-            { id: 'stories', icon: Database, label: 'Jira Stories' },
-            { id: 'plans', icon: ClipboardList, label: 'Test Plans' },
-            { id: 'cases', icon: CheckCircle2, label: 'Test Cases' },
-            { id: 'code', icon: Code2, label: 'Code Generator' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                activeTab === item.id 
-                  ? 'bg-primary/15 text-primary border border-primary/20 shadow-[0_0_15px_rgba(14,165,233,0.1)]' 
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
+        <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
+          <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <NavItem icon={<Database size={20}/>} label="Jira Stories" active={activeTab === 'stories'} onClick={() => setActiveTab('stories')} />
+          <NavItem icon={<BrainCircuit size={20}/>} label="AI Test Plan" active={activeTab === 'plan'} onClick={() => setActiveTab('plan')} badge={isGeneratingPlan ? "Thinking..." : undefined} />
+          <NavItem icon={<CheckCircle2 size={20}/>} label="Test Repository" active={activeTab === 'cases'} onClick={() => setActiveTab('cases')} />
+          <NavItem icon={<Code2 size={20}/>} label="Synesthetic Code" active={activeTab === 'code'} onClick={() => setActiveTab('code')} />
         </nav>
 
-        <div className="p-6 border-t border-white/5 space-y-4">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/10 to-transparent border border-white/5 overflow-hidden">
-            <p className="text-[10px] text-slate-500 mb-2 font-bold uppercase tracking-[2px]">Real-time Status</p>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-ping absolute" />
-                <div className="w-2 h-2 rounded-full bg-green-400" />
+        <div className="p-6 border-t border-white/5">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-cyan/20">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00F0FF] to-[#0066FF] p-0.5">
+              <div className="w-full h-full rounded-full bg-[#0a0e1a] flex items-center justify-center font-bold text-[#00F0FF]">
+                AK
               </div>
-              <span className="text-xs font-bold text-slate-300">Backend Connected</span>
             </div>
+            <div>
+              <p className="text-sm font-bold text-white">Guest User</p>
+              <p className="text-xs text-slate-500">Live Workspace</p>
+            </div>
+            <Settings size={16} className="ml-auto text-slate-400" />
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-8 bg-bg/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-xl border border-white/10 w-96">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search synchronized user stories..." 
-              className="bg-transparent border-none outline-none text-sm w-full placeholder:text-slate-500"
-            />
+      {/* Main Grid Background */}
+      <main className="flex-1 relative overflow-hidden flex flex-col bg-[#0a0e1a]">
+        <div className="absolute inset-0 grid-bg pointer-events-none" />
+        
+        {/* Top Header */}
+        <header className="h-20 border-b border-white/5 flex items-center justify-between px-10 relative z-20 backdrop-blur-md bg-[#111827]/30">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-[#00F0FF] shadow-[0_0_8px_#00F0FF]" />
+            <h2 className="text-lg font-heading font-bold uppercase tracking-widest text-slate-300">
+              {activeTab === 'stories' ? 'Jira Synchronization' : activeTab.replace('-', ' ')}
+            </h2>
           </div>
+          
           <div className="flex items-center gap-4">
-             <div className="px-4 py-1.5 rounded-full glass border border-white/5 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Jira Live Access</span>
-             </div>
+            <button 
+              onClick={syncJira}
+              disabled={isSyncing}
+              className="btn-neon-outline flex items-center gap-2"
+            >
+              <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+              Sync Live Stories
+            </button>
+            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-[#00F0FF] border border-white/5 cursor-pointer">
+              <Search size={20} />
+            </div>
           </div>
         </header>
 
-        <div className="p-8 space-y-8 animate-in">
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-10 relative z-10">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
-              <motion.div key="dashboard" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
-                <div className="grid grid-cols-4 gap-6">
-                  {[
-                    { label: 'Live Stories', value: stories.length, icon: Database, color: 'text-blue-400' },
-                    { label: 'Active Plans', value: currentPlan ? '1' : '0', icon: ClipboardList, color: 'text-purple-400' },
-                    { label: 'Test Cases', value: testCases.length, icon: FileText, color: 'text-amber-400' },
-                    { label: 'Project Health', value: '98%', icon: ShieldCheck, color: 'text-emerald-400' },
-                  ].map((stat, i) => (
-                    <div key={i} className="glass-card relative group">
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{stat.label}</p>
-                      <h3 className="text-3xl font-bold mt-2 neon-text">{stat.value}</h3>
-                    </div>
-                  ))}
+              <motion.div 
+                key="dashboard"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-8"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <StatCard label="Live Stories" value={stories.length} icon={<Database className="text-[#00F0FF]"/>} color="#00F0FF" />
+                  <StatCard label="AI Scenarios" value={testCases.length} icon={<BrainCircuit className="text-[#0066FF]"/>} color="#0066FF" />
+                  <StatCard label="Automation Rate" value="68%" icon={<Zap className="text-[#39FF14]"/>} color="#39FF14" />
+                  <StatCard label="Critical Defects" value="4" icon={<AlertTriangle className="text-[#FF006E]"/>} color="#FF006E" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="glass-card h-[350px]">
-                    <h3 className="text-sm font-bold mb-6 text-slate-400 uppercase tracking-widest">Automation Priority</h3>
-                    <ResponsiveContainer width="100%" height="80%">
-                      <BarChart data={STATS_DATA}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-                        <XAxis dataKey="name" stroke="#475569" fontSize={10} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip contentStyle={{ backgroundColor: '#020617', border: 'none', borderRadius: '12px', fontSize: '12px' }}/>
-                        <Bar dataKey="value" fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={24} />
-                        <defs>
-                          <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#0EA5E9" />
-                            <stop offset="100%" stopColor="#8B5CF6" />
-                          </linearGradient>
-                        </defs>
-                      </BarChart>
-                    </ResponsiveContainer>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 glass-card p-8">
+                    <h3 className="text-lg font-heading font-bold uppercase tracking-widest mb-8 flex items-center gap-3">
+                      <BarChart3 size={20} className="text-[#00F0FF]" />
+                      Coverage Analysis
+                    </h3>
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={STATS_DATA}>
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} stroke="#64748B" />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
+                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                          />
+                          <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={50}>
+                            {STATS_DATA.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                  <div className="glass-card h-[350px]">
-                     <h3 className="text-sm font-bold mb-6 text-slate-400 uppercase tracking-widest">TestCase Coverage</h3>
-                     <ResponsiveContainer width="100%" height="80%">
-                      <PieChart>
-                        <Pie data={STATS_DATA} innerRadius={70} outerRadius={90} paddingAngle={2} dataKey="value">
-                          {STATS_DATA.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+
+                  <div className="glass-card p-8 flex flex-col items-center justify-center h-full">
+                    <h3 className="text-lg font-heading font-bold uppercase tracking-widest mb-8 self-start flex items-center gap-3">
+                      <ShieldIcon size={20} className="text-[#39FF14]" />
+                      Project Guard
+                    </h3>
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={STATS_DATA}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={70}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {STATS_DATA.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-6 grid grid-cols-2 gap-4 w-full text-center">
+                      {STATS_DATA.map(stat => (
+                        <div key={stat.name} className="flex items-center gap-2 justify-center">
+                          <div className="w-2 h-2 rounded-full" style={{ background: stat.color }} />
+                          <span className="text-[10px] uppercase font-bold text-slate-500">{stat.name}: {stat.value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
             {activeTab === 'stories' && (
-              <motion.div key="stories" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-bold">Jira Synchronization</h2>
-                  <button onClick={() => window.location.reload()} className="btn-secondary flex items-center gap-2">
-                    <Database className="w-4 h-4" />
-                    Re-Sync Live Data
-                  </button>
-                </div>
-                <div className="glass-card overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead className="border-b border-white/5">
-                      <tr>
-                        <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Key</th>
-                        <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Summary</th>
-                        <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Status</th>
-                        <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Sync Date</th>
-                        <th className="p-4 text-[10px] font-bold text-slate-500 uppercase">Actions</th>
+              <motion.div 
+                key="stories"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="glass-card overflow-hidden"
+              >
+                <table className="w-full text-left">
+                  <thead className="bg-[#1e293b]/50 border-b border-white/10 text-slate-500">
+                    <tr>
+                      <th className="px-8 py-5 text-xs font-heading font-bold uppercase tracking-[0.2em]">Key</th>
+                      <th className="px-8 py-5 text-xs font-heading font-bold uppercase tracking-[0.2em]">Summary</th>
+                      <th className="px-8 py-5 text-xs font-heading font-bold uppercase tracking-[0.2em]">Priority</th>
+                      <th className="px-8 py-5 text-xs font-heading font-bold uppercase tracking-[0.2em] text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stories.map(story => (
+                      <tr key={story.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                        <td className="px-8 py-6 font-code text-[#00F0FF]">{story.key}</td>
+                        <td className="px-8 py-6">
+                          <p className="font-bold text-white mb-1 leading-tight">{story.summary}</p>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-wider">{story.status}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold tracking-widest ${
+                            story.priority === 'High' || story.priority === 'Highest' ? 'bg-[#FF006E]/10 text-[#FF006E]' : 
+                            story.priority === 'Medium' ? 'bg-[#F7C948]/10 text-[#F7C948]' : 'bg-[#00F0FF]/10 text-[#00F0FF]'
+                          }`}>
+                            {story.priority}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <button 
+                            onClick={() => generateTestPlan(story)}
+                            className="btn-cyber flex items-center gap-2 ml-auto"
+                          >
+                            <BrainCircuit size={14} />
+                            Architect Plan
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {stories.map((story) => (
-                        <tr key={story.id} className="hover:bg-white/5 transition-colors">
-                          <td className="p-4 font-mono font-bold text-primary">{story.key}</td>
-                          <td className="p-4 font-medium">{story.summary}</td>
-                          <td className="p-4"><span className="px-2 py-1 rounded bg-slate-800 text-[10px] font-bold">{story.status}</span></td>
-                          <td className="p-4 text-xs text-slate-500">Today, Real-time</td>
-                          <td className="p-4">
-                            <button onClick={() => { setSelectedStory(story.id); setActiveTab('plans'); }} className="p-2 glass rounded-lg hover:text-primary transition-all">
-                              <Zap className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </motion.div>
             )}
 
-            {activeTab === 'plans' && (
-              <motion.div key="plans" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="max-w-4xl mx-auto space-y-8">
-                <div className="glass-card text-center py-12 space-y-4">
-                  <div className="w-16 h-16 rounded-2xl glass mx-auto flex items-center justify-center mb-4">
-                    <ClipboardList className="w-8 h-8 text-primary" />
+            {activeTab === 'plan' && (
+              <motion.div 
+                key="plan"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-8"
+              >
+                {!selectedStory ? (
+                  <div className="p-20 text-center glass-card">
+                    <p className="text-slate-500 font-heading tracking-widest">Select a story to architect high-fidelity test plans.</p>
                   </div>
-                  <h2 className="text-2xl font-bold">Automated Strategy Orchestration</h2>
-                  <p className="text-slate-400 max-w-md mx-auto">Select a synchronized story to begin strategic test mapping using real AI analysis.</p>
-                  
-                  <div className="flex gap-4 max-w-lg mx-auto pt-4">
-                    <select value={selectedStory || ''} onChange={(e) => setSelectedStory(e.target.value)} className="flex-1 glass border-white/10 p-4 rounded-2xl outline-none focus:border-primary">
-                      <option value="" disabled>Choose synchronized story...</option>
-                      {stories.map(s => <option key={s.id} value={s.id}>{s.key}: {s.summary}</option>)}
-                    </select>
-                    <button onClick={handleGenerateTestPlan} disabled={!selectedStory || isGenerating} className="btn-primary min-w-[200px]">
-                      {isGenerating ? <Loader2 className="animate-spin w-5 h-5 mx-auto" /> : 'Generate Plan'}
-                    </button>
-                  </div>
-                </div>
-
-                {isGenerating && (
-                  <div className="text-center p-8 animate-pulse text-primary font-bold tracking-widest text-sm uppercase">
-                    &gt; {genMessage}
-                  </div>
-                )}
-
-                {currentPlan && (
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card border-l-4 border-primary space-y-6">
-                    <div className="flex justify-between border-b border-white/5 pb-4">
-                      <h3 className="text-xl font-bold">Generated Strategy: TP-101</h3>
-                      <span className="text-emerald-400 text-[10px] font-bold">V1.0.0 Real-time</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 italic">Strategic Objective</h4>
-                        <p className="text-sm leading-relaxed">{currentPlan.objective}</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <h3 className="text-3xl font-brand font-black text-white">{selectedStory.key} Strategy</h3>
+                        <p className="text-[#00F0FF] font-heading tracking-[0.2em] uppercase text-xs">{selectedStory.summary}</p>
                       </div>
-                      <div>
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 italic">Entry Threshold</h4>
-                        <p className="text-sm leading-relaxed">{currentPlan.entryCriteria}</p>
+                      <button 
+                        onClick={generateTestCases}
+                        disabled={isGeneratingCases || isGeneratingPlan}
+                        className="btn-cyber flex items-center gap-2"
+                      >
+                        {isGeneratingCases ? <RefreshCw className="animate-spin" size={16}/> : <Zap size={16}/>}
+                        Synthesis Test Cases
+                      </button>
+                    </div>
+
+                    {isGeneratingPlan && (
+                      <div className="glass-card p-12 text-center space-y-6">
+                        <div className="flex justify-center gap-3">
+                          <div className="ai-dot" />
+                          <div className="ai-dot" style={{ animationDelay: '0.16s' }} />
+                          <div className="ai-dot" style={{ animationDelay: '0.32s' }} />
+                        </div>
+                        <p className="text-lg font-heading tracking-[0.3em] text-[#00F0FF] animate-pulse uppercase">{aiStatus}</p>
                       </div>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20">
-                      <h4 className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest mb-2">
-                        <Zap className="w-3 h-3" />
-                        AI Analysis Note
-                      </h4>
-                      <p className="text-sm italic text-slate-300">{currentPlan.planContent}</p>
-                    </div>
-                    <div className="flex justify-end">
-                       <button onClick={() => { setActiveTab('cases'); handleGenerateTestCases(); }} className="btn-secondary flex items-center gap-2">
-                          Next: Map Test Scenarios
-                          <ChevronRight className="w-4 h-4" />
-                       </button>
-                    </div>
-                  </motion.div>
+                    )}
+
+                    {testPlan && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <PlanSection title="Primary Objectives" items={testPlan.objectives} icon={<ShieldCheck className="text-[#39FF14]"/>} />
+                        <PlanSection title="Risk Matrix" items={testPlan.risks} icon={<AlertTriangle className="text-[#FF006E]"/>} />
+                        <PlanSection title="Entry Criteria" items={testPlan.entryCriteria} icon={<CheckCircle2 className="text-[#00F0FF]"/>} />
+                        <PlanSection title="Data Strategy" items={testPlan.dataRequirements} icon={<Database className="text-[#F7C948]"/>} />
+                      </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             )}
 
             {activeTab === 'cases' && (
-              <motion.div key="cases" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-3xl font-bold">Scenario Repository</h2>
-                  <button onClick={handleGenerateTestCases} className="glass p-3 rounded-xl hover:text-primary"><Zap className="w-5 h-5" /></button>
-                </div>
-                {testCases.map((tc, i) => (
-                  <motion.div key={tc.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.1 } }} className="glass-card p-6 flex justify-between items-center hover:border-primary/30 transition-all group">
-                    <div className="flex items-center gap-6">
-                       <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xs font-bold text-slate-500 group-hover:text-primary">0{i+1}</div>
-                       <div>
-                          <h4 className="font-bold text-lg">{tc.title}</h4>
-                          <div className="flex gap-4 mt-1">
-                            <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1"><AlertCircle className="w-3 h-3 text-amber-500" /> {tc.priority}</span>
-                            <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-blue-500" /> {tc.category}</span>
-                          </div>
-                       </div>
+              <motion.div 
+                key="cases"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              >
+                {testCases.map((tc, idx) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-card p-6 flex flex-col group border-transparent hover:border-[#00F0FF]/30"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.2em] ${
+                        tc.type === 'Positive' ? 'bg-[#39FF14]/10 text-[#39FF14]' : 
+                        tc.type === 'Security' ? 'bg-[#FF006E]/10 text-[#FF006E]' : 
+                        'bg-[#F7C948]/10 text-[#F7C948]'
+                      }`}>
+                        {tc.type}
+                      </span>
+                      <ChevronRight size={16} className="text-slate-700 group-hover:text-[#00F0FF] transition-all" />
                     </div>
-                    <button onClick={() => handleGenerateCode(tc)} className="p-3 bg-primary/10 text-primary rounded-xl border border-primary/20 hover:bg-primary hover:text-white transform group-hover:scale-110 transition-all">
-                      <Code2 className="w-5 h-5" />
+                    <h4 className="text-lg font-bold text-white mb-3 line-clamp-2 leading-tight">{tc.title}</h4>
+                    <p className="text-xs text-slate-500 mb-6 flex-1 italic line-clamp-3">"{tc.expectedResults}"</p>
+                    <button 
+                      onClick={() => generateCode(tc)}
+                      className="btn-ghost flex items-center justify-center gap-2 group-hover:bg-[#00F0FF] group-hover:text-black"
+                    >
+                      <Code2 size={14} />
+                      Automation SYNTH
                     </button>
                   </motion.div>
                 ))}
@@ -385,74 +486,129 @@ const App: React.FC = () => {
             )}
 
             {activeTab === 'code' && (
-              <motion.div key="code" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-3 gap-8">
-                <div className="col-span-1 glass-card space-y-6">
-                  <h3 className="text-xl font-bold">Script Config</h3>
-                  <div className="space-y-4">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Automation Schema</p>
-                    <div className="grid grid-cols-2 gap-2">
-                       {['Playwright', 'Selenium'].map(f => (
-                         <button key={f} className={`p-4 rounded-2xl glass text-xs font-bold border ${f === 'Playwright' ? 'border-primary text-primary' : 'border-white/5 text-slate-500'}`}>{f}</button>
-                       ))}
-                    </div>
+              <motion.div 
+                key="code"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="glass-card flex flex-col h-[700px] border-none shadow-2xl relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-5">
+                   <SentinelLogo />
+                </div>
+                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02] z-10">
+                  <div className="flex items-center gap-6">
+                    <select 
+                      value={selectedFramework}
+                      onChange={(e) => setSelectedFramework(e.target.value)}
+                      className="bg-transparent text-[#00F0FF] font-bold focus:outline-none cursor-pointer uppercase tracking-widest text-xs"
+                    >
+                      <option className="bg-[#111827]">Playwright</option>
+                      <option className="bg-[#111827]">Selenium</option>
+                      <option className="bg-[#111827]">Cypress</option>
+                    </select>
+                    <div className="w-px h-4 bg-white/10" />
+                    <select 
+                      value={selectedLanguage}
+                      onChange={(e) => setSelectedLanguage(e.target.value)}
+                      className="bg-transparent text-slate-400 focus:outline-none cursor-pointer text-xs"
+                    >
+                      <option className="bg-[#111827]">TypeScript</option>
+                      <option className="bg-[#111827]">JavaScript</option>
+                      <option className="bg-[#111827]">Python</option>
+                    </select>
                   </div>
-                  <div className="space-y-4">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Execution Language</p>
-                    <div className="grid grid-cols-2 gap-2">
-                       {['TypeScript', 'Java', 'Python'].map(l => (
-                         <button key={l} className={`p-4 rounded-2xl glass text-xs font-bold border ${l === 'TypeScript' ? 'border-secondary text-secondary' : 'border-white/5 text-slate-500'}`}>{l}</button>
-                       ))}
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <button className="btn-ghost !px-3 !py-1.5 flex items-center gap-2 !text-xs">
+                      <Copy size={14} />
+                      Copy
+                    </button>
+                    <button className="btn-cyber !px-4 !py-1.5 flex items-center gap-2 !text-xs">
+                      <Download size={14} />
+                      Export
+                    </button>
                   </div>
                 </div>
-                <div className="col-span-2 glass-card p-0 overflow-hidden min-h-[500px] flex flex-col border border-white/5">
-                   <div className="bg-slate-900/80 p-4 border-b border-white/5 flex justify-between items-center">
-                     <div className="flex gap-2">
-                        <div className="w-3 h-3 rounded-full bg-rose-500/50" />
-                        <div className="w-3 h-3 rounded-full bg-amber-500/50" />
-                        <div className="w-3 h-3 rounded-full bg-emerald-500/50" />
-                     </div>
-                     <span className="text-[10px] font-mono text-slate-500">orchestrator_output.spec.ts</span>
-                   </div>
-                   <div className="flex-1 p-8 overflow-auto font-mono text-xs text-blue-300 bg-black/40">
-                      {isGenerating ? (
-                        <div className="flex items-center justify-center h-full gap-4 text-primary animate-pulse">
-                          <Loader2 className="animate-spin w-8 h-8" />
-                          <span className="font-bold tracking-tighter">&gt; SYNTHESIZING EXECUTABLE CONTEXT...</span>
-                        </div>
-                      ) : (
-                        <pre className="whitespace-pre-wrap">{generatedCode || '// Select a scenario to generate executable code...'}</pre>
-                      )}
-                   </div>
+                
+                <div className="flex-1 p-8 font-code text-xs overflow-auto bg-[#0a0e10]/80 relative custom-scrollbar border-t border-white/5">
+                  {isGeneratingCode && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-12 h-12 border-b-2 border-[#00F0FF] rounded-full animate-spin glow-cyan" />
+                        <span className="font-heading tracking-[0.4em] text-[#00F0FF] animate-pulse">SYNTHESIZING...</span>
+                      </div>
+                    </div>
+                  )}
+                  <pre className="text-[#00F0FF]/90 leading-relaxed font-code selection:bg-[#00F0FF]/20">
+                    <code>{generatedCode || '// Select a scenario to synthesize automation script...'}</code>
+                  </pre>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </main>
-
-      {/* Global AI Loader for intensive tasks */}
-      {isGenerating && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 glass px-8 py-3 rounded-full border border-primary/30 shadow-[0_0_30px_rgba(14,165,233,0.2)] flex items-center gap-4 z-50 animate-in">
-           <Loader2 className="w-5 h-5 text-primary animate-spin" />
-           <span className="text-xs font-bold text-slate-300 font-mono italic">{genMessage}</span>
-        </div>
-      )}
-
-      {/* Background elements */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-primary/5 rounded-full blur-[160px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/5 rounded-full blur-[160px]" />
-      </div>
-
-      <footer className="fixed bottom-6 right-8 flex gap-4 pointer-events-none">
-        <div className="glass px-4 py-2 rounded-xl flex items-center gap-3 opacity-30 border border-white/5">
-          <Terminal className="w-4 h-4" />
-          <span className="text-[10px] font-bold tracking-widest uppercase">Kernel 2.0.1_R</span>
-        </div>
-      </footer>
     </div>
   );
-};
+}
+
+// Subcomponents
+function NavItem({ icon, label, active, onClick, badge }: { icon: any, label: string, active?: boolean, onClick: () => void, badge?: string }) {
+  return (
+    <div 
+      onClick={onClick}
+      className={`flex items-center gap-3 px-6 py-4 rounded-xl cursor-pointer transition-all duration-300 group relative ${
+        active 
+          ? 'bg-gradient-to-r from-[#00F0FF]/10 to-transparent text-[#00F0FF] border border-[#00F0FF]/10' 
+          : 'text-slate-500 hover:text-white hover:bg-white/5 border border-transparent'
+      }`}
+    >
+      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-[#00F0FF] rounded-r-full shadow-[0_0_12px_#00F0FF]" />}
+      <span className={`${active ? 'text-[#00F0FF]' : 'group-hover:text-[#00F0FF]'} transition-colors`}>{icon}</span>
+      <span className="font-heading text-xs font-bold uppercase tracking-[0.2em]">{label}</span>
+      {badge && (
+        <span className="ml-auto text-[8px] font-black uppercase tracking-tighter bg-[#00F0FF]/10 text-[#00F0FF] px-2 py-1 rounded animate-pulse border border-[#00F0FF]/20">
+          {badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, color }: { label: string, value: string | number, icon: any, color: string }) {
+  return (
+    <div className="glass-card p-6 flex flex-col relative overflow-hidden group">
+      <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div className="flex items-start justify-between mb-4">
+        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-white/10 transition-all shadow-inner">
+          {icon}
+        </div>
+        <div className="w-1 h-1 rounded-full bg-slate-800" />
+      </div>
+      <p className="text-[10px] uppercase font-heading font-black tracking-[0.2em] text-slate-500 mb-1">{label}</p>
+      <p className="text-3xl font-brand font-black animate-glow-text" style={{ color }}>{value}</p>
+    </div>
+  );
+}
+
+function PlanSection({ title, items, icon }: { title: string, items: string[], icon: any }) {
+  return (
+    <div className="glass-card p-8 group border-transparent hover:border-white/5">
+      <h4 className="text-[10px] font-heading font-black uppercase tracking-[0.4em] mb-8 flex items-center gap-3 text-slate-500 group-hover:text-slate-300 transition-colors">
+        {icon}
+        {title}
+      </h4>
+      <ul className="space-y-5">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-4 group/item items-start">
+            <span className="text-[#00F0FF] font-code text-[10px] opacity-40 group-hover/item:opacity-100 transition-opacity mt-1">
+              {(i+1).toString().padStart(2, '0')}
+            </span>
+            <span className="text-xs text-slate-400 group-hover/item:text-slate-200 transition-colors leading-relaxed tracking-wide">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default App;

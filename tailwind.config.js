@@ -7,18 +7,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: '#0EA5E9',
-          dark: '#0284C7',
-        },
-        secondary: {
-          DEFAULT: '#8B5CF6',
-          dark: '#7C3AED',
-        },
-        bg: {
-          DEFAULT: '#020617',
-          card: '#0F172A',
-        },
+        'bg-deep': '#0a0e1a',
+        'bg-card': '#111827',
+        'bg-hover': '#1e293b',
+        'cyan': '#00F0FF',
+        'electric': '#0066FF',
+        'neon': '#39FF14',
+        'hotpink': '#FF006E',
+        'amber': '#F7C948',
+      },
+      fontFamily: {
+        brand: ['Orbitron', 'monospace'],
+        heading: ['Rajdhani', 'sans-serif'],
+        body: ['Sora', 'sans-serif'],
+        code: ['JetBrains Mono', 'monospace'],
       },
       animation: {
         'glow-pulse': 'glow-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -38,5 +40,3 @@ export default {
   },
   plugins: [],
 }
-
-
