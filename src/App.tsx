@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // API Configuration
 const API_BASE = window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001/api' 
+  ? 'http://localhost:8080/api' 
   : `${window.location.origin}/api`;
 
 const STATS_DATA = [
