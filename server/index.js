@@ -102,13 +102,14 @@ app.get('/api/generate/test-plan', async (req, res) => {
 
 // 3. Test Case Generation
 app.post('/api/generate/test-cases', async (req, res) => {
-  const { storyId, provider } = req.body;
+  const { storyId, provider, screenshot } = req.body;
   const story = storiesStore.find(s => s.id === storyId);
   
   try {
-    const newCases = await aiService.generateTestCases(story, provider);
+    const newCases = await aiService.generateTestCases({ story, screenshot }, provider);
     res.json(newCases);
   } catch (err) {
+    console.error('Test Case Gen Error:', err.message);
     res.status(500).json({ error: 'AI generation failed' });
   }
 });

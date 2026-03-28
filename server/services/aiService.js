@@ -45,15 +45,15 @@ class AIService {
     return this.generateMockPlan(story);
   }
 
-  async generateTestCases(story, preferredProvider = null) {
+  async generateTestCases(data, preferredProvider = null) {
     const provider = preferredProvider || this.provider;
 
-    if (provider === 'gemini' && genAI) {
-      return this.generateWithGemini(story, 'cases');
+    if (provider === 'gemini') {
+      return this.generateWithGemini(data, 'cases');
     } else if (provider === 'local' && process.env.LOCAL_LLM_URL) {
-      return this.generateWithLocal(story, 'cases');
+      return this.generateWithLocal(data, 'cases');
     } else if (anthropic) {
-      return this.generateWithWithAnthropic(story, 'cases');
+      return this.generateWithWithAnthropic(data, 'cases');
     }
 
     return this.generateMockCases();
@@ -110,23 +110,40 @@ class AIService {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
       
       let prompt = '';
+      let inlineData = null;
+
       if (type === 'plan') {
-         prompt = `Create a structured test plan for Jira story: ${data.summary}. Return ONLY raw JSON (no markdown blocks, no intro/outro). 
+         prompt = `Create a structured test plan for Jira story: ${data.story?.summary || 'New System'}. Return ONLY raw JSON (no markdown blocks, no intro/outro). 
          JSON Keys: objective, entryCriteria, riskAssessment, planContent.
-         Story Context: ${data.description || 'No detailed description'}`;
+         Story Context: ${data.story?.description || 'No detailed description'}`;
       } else if (type === 'cases') {
-         prompt = `Generate 5 test cases for: ${data.summary}. Return ONLY a raw JSON array of objects with keys: id, title, priority, category, status. No markdown.`;
+         prompt = `Generate 5 test cases for: ${data.story?.summary || 'System based on screenshot'}. Return ONLY a raw JSON array of objects with keys: id, title, priority, category, status. No markdown.`;
+         if (data.screenshot) {
+            prompt += " Analyze the attached screenshot for UI patterns and edge cases.";
+            const base64Data = data.screenshot.split(',')[1];
+            inlineData = {
+              mimeType: "image/png",
+              data: base64Data
+            };
+         }
       } else if (type === 'code') {
          prompt = `Generate ${data.framework} ${data.language} code for: ${data.testCase.title}. Return raw code only. No markdown.`;
       }
 
-      const response = await axios.post(url, {
-        contents: [{ parts: [{ text: prompt }] }],
+      const requestPayload = {
+        contents: [{ 
+          parts: [
+            { text: prompt },
+            ...(inlineData ? [{ inlineData }] : [])
+          ] 
+        }],
         generationConfig: {
           maxOutputTokens: 4096,
           temperature: 0.1,
         }
-      });
+      };
+
+      const response = await axios.post(url, requestPayload);
 
       if (!response.data.candidates || response.data.candidates.length === 0) {
         throw new Error('Gemini returned no candidates.');

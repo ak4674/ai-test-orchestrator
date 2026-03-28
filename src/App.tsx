@@ -31,9 +31,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 // API Configuration
-const API_BASE = window.location.hostname === 'localhost' 
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
   ? 'http://localhost:8080/api' 
-  : `${window.location.origin}/api`;
+  : '/api';
 
 const STATS_DATA = [
   { name: 'Critical', value: 4, color: '#FF006E' }, // Hot Pink
