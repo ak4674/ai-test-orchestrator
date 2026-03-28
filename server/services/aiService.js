@@ -10,9 +10,21 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) 
   : null;
 
+console.log('--- AI Env Debug ---');
+console.log('ANTHROPIC:', !!process.env.ANTHROPIC_API_KEY);
+console.log('GEMINI:', !!process.env.GEMINI_API_KEY);
+console.log('AI_PROVIDER:', process.env.AI_PROVIDER);
+console.log('--------------------');
+
 const genAI = process.env.GEMINI_API_KEY 
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) 
   : null;
+
+if (genAI) {
+  console.log('✅ Gemini AI Client initialized.');
+} else {
+  console.warn('⚠️ Gemini AI Client: Missing GEMINI_API_KEY.');
+}
 
 class AIService {
   constructor() {
@@ -94,21 +106,46 @@ class AIService {
 
   async generateWithGemini(data, type) {
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = "gemini-3-flash-preview"; 
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      
       let prompt = '';
       if (type === 'plan') {
-        prompt = `Create a structured test plan JSON for Jira story: ${data.summary}. Keys: objective, entryCriteria, riskAssessment, planContent. Raw JSON output only.`;
+         prompt = `Create a structured test plan for Jira story: ${data.summary}. Return ONLY raw JSON (no markdown blocks, no intro/outro). 
+         JSON Keys: objective, entryCriteria, riskAssessment, planContent.
+         Story Context: ${data.description || 'No detailed description'}`;
       } else if (type === 'cases') {
-        prompt = `Generate 5 test cases JSON array for: ${data.summary}. Keys: id, title, priority, category, status. JSON only.`;
+         prompt = `Generate 5 test cases for: ${data.summary}. Return ONLY a raw JSON array of objects with keys: id, title, priority, category, status. No markdown.`;
       } else if (type === 'code') {
-        prompt = `Generate ${data.framework} ${data.language} code for: ${data.testCase.title}. Code only.`;
+         prompt = `Generate ${data.framework} ${data.language} code for: ${data.testCase.title}. Return raw code only. No markdown.`;
       }
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().replace(/```json|```/g, '').trim();
-      return type === 'code' ? text : JSON.parse(text);
+      const response = await axios.post(url, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: 0.1,
+        }
+      });
+
+      if (!response.data.candidates || response.data.candidates.length === 0) {
+        throw new Error('Gemini returned no candidates.');
+      }
+
+      let text = response.data.candidates[0].content.parts[0].text;
+      // Sanitize JSON output from LLM
+      text = text.replace(/```json|```/g, '').trim();
+      
+      try {
+        return type === 'code' ? text : JSON.parse(text);
+      } catch (e) {
+        console.log('--- RAW GEMINI OUTPUT ---');
+        console.log(text);
+        console.log('--------------------------');
+        throw e;
+      }
     } catch (err) {
-      console.error('Gemini Error:', err.message);
+      console.error('Gemini Error:', err.response?.data || err.message);
       throw err;
     }
   }

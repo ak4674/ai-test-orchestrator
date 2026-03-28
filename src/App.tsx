@@ -16,6 +16,7 @@ import {
   Download,
   BrainCircuit,
   ShieldCheck as ShieldIcon,
+  Terminal,
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -110,7 +111,18 @@ const App: React.FC = () => {
   const [selectedFramework, setSelectedFramework] = useState('Playwright');
   const [selectedLanguage, setSelectedLanguage] = useState('TypeScript');
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState('anthropic');
+  const [selectedProvider, setSelectedProvider] = useState('gemini');
+  
+  // Dynamic Configuration State (as per screenshot)
+  const [showConfig, setShowConfig] = useState(false);
+  const [jiraConfig, setJiraConfig] = useState({
+    url: 'https://akyanand.atlassian.net/',
+    projectKey: 'SCRUM',
+    email: 'aky.anand@gmail.com',
+    token: '••••••••••••••••'
+  });
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
 
   // Sync Jira Stories
   const syncJira = async () => {
@@ -154,15 +166,19 @@ const App: React.FC = () => {
     };
   };
 
-  // Generate Test Cases
+  // Generate Test Cases (Supports Multi-modal if screenshot present)
   const generateTestCases = async () => {
-    if (!selectedStory) return;
+    if (!selectedStory && !screenshot) return;
     setIsGeneratingCases(true);
     try {
       const res = await fetch(`${API_BASE}/generate/test-cases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyId: selectedStory.id, provider: selectedProvider })
+        body: JSON.stringify({ 
+          storyId: selectedStory?.id, 
+          provider: selectedProvider,
+          screenshot: screenshotPreview // Base64
+        })
       });
       const data = await res.json();
       setTestCases(data);
@@ -221,33 +237,70 @@ const App: React.FC = () => {
           <NavItem icon={<BrainCircuit size={20}/>} label="AI Test Plan" active={activeTab === 'plan'} onClick={() => setActiveTab('plan')} badge={isGeneratingPlan ? "Thinking..." : undefined} />
           <NavItem icon={<CheckCircle2 size={20}/>} label="Test Repository" active={activeTab === 'cases'} onClick={() => setActiveTab('cases')} />
           <NavItem icon={<Code2 size={20}/>} label="Synesthetic Code" active={activeTab === 'code'} onClick={() => setActiveTab('code')} />
+          <NavItem icon={<Settings size={20}/>} label="Configuration" active={showConfig} onClick={() => setShowConfig(!showConfig)} />
         </nav>
 
-        {/* AI Provider Selector */}
-        <div className="px-6 py-4 border-t border-white/5 bg-black/20">
-          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-heading mb-3">Neural Core</p>
-          <div className="space-y-2">
-            {[
-              { id: 'anthropic', name: 'Claude 3.5', color: '#FF7F50' },
-              { id: 'gemini', name: 'Gemini Flash', color: '#4285F4' },
-              { id: 'local', name: 'Local (Llama)', color: '#39FF14' }
-            ].map(p => (
-              <label key={p.id} className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-all border ${selectedProvider === p.id ? 'bg-white/5 border-cyan/30 shadow-[0_0_10px_rgba(0,240,255,0.1)]' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+        {/* Dynamic Configuration Panel - Mirroring User Attached Pic */}
+        <AnimatePresence>
+          {showConfig && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="px-6 py-4 bg-black/40 border-t border-white/5 space-y-4 overflow-hidden"
+            >
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-slate-500 block mb-2">AI Provider</label>
+                <select 
+                  value={selectedProvider} 
+                  onChange={(e) => setSelectedProvider(e.target.value)}
+                  className="w-full bg-[#1c2537] border border-white/10 rounded px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-cyan/50"
+                >
+                  <option value="gemini">Google Gemini 3</option>
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="local">Local LLM (OpenAI Compatible)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] uppercase tracking-widest text-slate-500 block mb-2">Jira URL</label>
                 <input 
-                  type="radio" 
-                  name="provider" 
-                  value={p.id} 
-                  checked={selectedProvider === p.id}
-                  onChange={() => setSelectedProvider(p.id)}
-                  className="hidden"
+                  type="text" 
+                  value={jiraConfig.url}
+                  onChange={(e) => setJiraConfig({...jiraConfig, url: e.target.value})}
+                  className="w-full bg-[#1c2537] border border-white/10 rounded px-2 py-1.5 text-xs text-slate-300"
+                  placeholder="https://your-domain.atlassian.net"
                 />
-                <div className={`w-2 h-2 rounded-full`} style={{ backgroundColor: p.color, boxShadow: `0 0 8px ${p.color}` }} />
-                <span className="text-xs font-heading font-medium tracking-wide">{p.name}</span>
-                {selectedProvider === p.id && <div className="ml-auto w-1 h-1 bg-cyan rounded-full animate-ping" />}
-              </label>
-            ))}
-          </div>
-        </div>
+              </div>
+
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase tracking-widest text-slate-500 block mb-2">Project Key</label>
+                  <input 
+                    type="text" 
+                    value={jiraConfig.projectKey}
+                    onChange={(e) => setJiraConfig({...jiraConfig, projectKey: e.target.value})}
+                    className="w-full bg-[#1c2537] border border-white/10 rounded px-2 py-1.5 text-xs text-slate-300"
+                    placeholder="PROJ"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] uppercase tracking-widest text-slate-500 block mb-2">Email</label>
+                  <input 
+                    type="text" 
+                    value={jiraConfig.email}
+                    onChange={(e) => setJiraConfig({...jiraConfig, email: e.target.value})}
+                    className="w-full bg-[#1c2537] border border-white/10 rounded px-2 py-1.5 text-xs text-slate-300"
+                  />
+                </div>
+              </div>
+
+              <button className="w-full py-2 bg-gradient-to-r from-cyan/20 to-blue/20 border border-cyan/30 rounded text-[10px] uppercase font-bold tracking-widest text-cyan hover:bg-cyan/30 transition-all">
+                Update Live Config
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="p-6 border-t border-white/5">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-cyan/20">
@@ -309,6 +362,39 @@ const App: React.FC = () => {
                   <StatCard label="AI Scenarios" value={testCases.length} icon={<BrainCircuit className="text-[#0066FF]"/>} color="#0066FF" />
                   <StatCard label="Automation Rate" value="68%" icon={<Zap className="text-[#39FF14]"/>} color="#39FF14" />
                   <StatCard label="Critical Defects" value="4" icon={<AlertTriangle className="text-[#FF006E]"/>} color="#FF006E" />
+                </div>
+
+                {/* Screenshot Insight Area - Dynamic AI Generation */}
+                <div className="glass-card p-8 border-dashed border-2 border-cyan/20 flex flex-col items-center justify-center min-h-[200px] group hover:border-cyan/50 transition-all cursor-pointer relative overflow-hidden">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setScreenshot(file);
+                        const reader = new FileReader();
+                        reader.onloadend = () => setScreenshotPreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {screenshotPreview ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <img src={screenshotPreview} alt="Target System" className="h-32 rounded border border-cyan/30 shadow-[0_0_15px_rgba(0,240,255,0.2)]" />
+                      <p className="text-xs text-cyan animate-pulse uppercase tracking-widest font-heading font-bold">Screenshot Linked: System Ready for Visual Analysis</p>
+                      <button onClick={generateTestCases} className="btn-neon text-[10px]">Analyze & Generate Scenarios</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="p-4 rounded-full bg-cyan/10 group-hover:bg-cyan/20 transition-all mb-4">
+                        <Database size={32} className="text-cyan animate-pulse" />
+                      </div>
+                      <h4 className="text-sm font-heading font-bold uppercase tracking-widest text-slate-300">Visual Intelligence Core</h4>
+                      <p className="text-xs text-slate-500 mt-2">Drop system screenshot here to generate test cases from UI patterns</p>
+                    </>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -477,8 +563,34 @@ const App: React.FC = () => {
                 key="cases"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                className="space-y-8"
               >
+                {/* Playwright Automation Status Card - Mirroring User Attached Pic */}
+                <div className="p-8 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border-l-4 border-cyan rounded-r-xl group hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] transition-all flex items-center justify-between">
+                  <div className="space-y-2">
+                    <h4 className="text-3xl font-brand font-black text-white tracking-tight group-hover:text-cyan transition-colors">Playwright</h4>
+                    <p className="text-sm text-slate-400 font-heading opacity-80 uppercase tracking-widest flex items-center gap-2">
+                      <Terminal size={14} className="text-cyan" /> Integrated Browser Automation Engine
+                    </p>
+                    <div className="flex gap-4 mt-6">
+                      <span className="px-3 py-1 bg-cyan/10 border border-cyan/20 rounded-full text-[10px] font-black text-cyan uppercase tracking-widest animate-pulse">Live Recorder Active</span>
+                      <span className="px-3 py-1 bg-green-400/10 border border-green-400/20 rounded-full text-[10px] font-black text-green-400 uppercase tracking-widest">SFDC Ready</span>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-cyan blur-2xl opacity-10 animate-pulse rounded-full" />
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                      className="p-4 rounded-full bg-cyan/10 border border-cyan/30 text-cyan relative z-10"
+                    >
+                      <RefreshCw size={40} className="opacity-60" />
+                    </motion.div>
+                    <Zap size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan shadow-[0_0_15px_#00F0FF]" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {testCases.map((tc, idx) => (
                   <motion.div 
                     key={idx}
@@ -507,6 +619,7 @@ const App: React.FC = () => {
                     </button>
                   </motion.div>
                 ))}
+                </div>
               </motion.div>
             )}
 
